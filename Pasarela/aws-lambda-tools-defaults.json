@@ -1,0 +1,23 @@
+
+{
+    "Information" : [
+        "This file provides default values for the deployment wizard inside Visual Studio and the AWS Lambda commands added to the .NET Core CLI.",
+        "To learn more about the Lambda commands with the .NET Core CLI execute the following command at the command line in the project root directory.",
+        "dotnet lambda help",
+        "All the command line options for the Lambda command can be specified in this file."
+    ],
+    "profile"     : "carlosvalderrama1204",
+    "region"      : "us-east-1",
+    "configuration" : "Release",
+    "framework"     : "netcoreapp2.1",
+    "function-runtime" : "dotnetcore2.1",
+    "function-memory-size" : 256,
+    "function-timeout"     : 30,
+    "function-handler"     : "Pasarela::Pasarela.Function::FunctionHandler",
+    "function-name"        : "ApiKey",
+    "function-role"        : "arn:aws:iam::223800601120:role/service-role/lambda_basic_execution",
+    "function-security-groups" : "sg-4be89f67",
+    "tracing-mode"             : "PassThrough",
+    "environment-variables"    : "",
+    "function-subnets"         : "subnet-943fcab5"
+}
