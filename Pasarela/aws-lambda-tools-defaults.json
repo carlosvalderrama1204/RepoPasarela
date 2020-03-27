@@ -18,6 +18,9 @@
     "function-role"        : "arn:aws:iam::223800601120:role/service-role/lambda_basic_execution",
     "function-security-groups" : "sg-4be89f67",
     "tracing-mode"             : "PassThrough",
-    "environment-variables"    : "",
-    "function-subnets"         : "subnet-943fcab5"
+    "environmentVariables"     : {
+        "ASPNETCORE_ENVIRONMENT" : "Development"
+    },
+    "function-subnets"         : "subnet-943fcab5",
+    "environment-variables"    : "\"uri\"=\"https://test3.e-collect.com/app_express/api/getSessionToken\";\"ApiKey\"=\"4437637A572B766F4F587934664A62334E383577304D79657152584E77557331\";\"EntityCode\"=\"41610\""
 }
