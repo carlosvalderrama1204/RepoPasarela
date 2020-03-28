@@ -1,27 +1,20 @@
-using System;
-using System.Threading.Tasks;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.DataModel;
+using Amazon.DynamoDBv2.DocumentModel;
 using Amazon.Lambda.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Polly;
-using System.Net.Http;
 using Microsoft.Graph;
-using System.Text;
-using Newtonsoft.Json;
-using System.Configuration;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.EnvironmentVariables;
-using Microsoft.Extensions.Configuration.FileExtensions;
-using Microsoft.Extensions.Configuration.Json;
-using static Pasarela.Function;
-using static Pasarela.Constants;
-using Amazon.DynamoDBv2;
-using Amazon.DynamoDBv2.DocumentModel;
+using Polly;
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.Json.JsonSerializer))]
+
 
 namespace Pasarela
 {
@@ -35,57 +28,48 @@ namespace Pasarela
         /// <param name="input"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        public async Task<TokenEcollect> FunctionHandler(string input, ILambdaContext context)
+        public async Task<TokenEcollectResponse> FunctionHandler(string input, ILambdaContext context)
         {
 
+
+
+
             var serviceCollection = new ServiceCollection();
-
-
-            serviceCollection.AddLogging(b =>
-            {
-                b.AddFilter((category, level) => true); // Spam the world with logs.
-
-
-            });
             ConfigureServices(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
-
-
             var ecollectToken = services.GetRequiredService<EcollectTokenClient>();
-
-
             var response = await ecollectToken.GetJson(ConfigService);
 
-            var data = await response.Content.ReadAsAsync<TokenEcollect>();
+            var data = await response.Content.ReadAsAsync<TokenEcollectResponse>();
             SaveToken(data);
-            LambdaLogger.Log("Comprobar variable: ");
-            //LambdaLogger.Log(ConfigService.GetConfiguration()[input] ?? "None");
+           
+           
             return data;
         }
 
-        public static void SaveToken(TokenEcollect respuestaPasarela)
+        public static void SaveToken(TokenEcollectResponse respuestaPasarela)
         {
             AmazonDynamoDBClient client = new AmazonDynamoDBClient();
-            //var context = new DynamoDBContext(client);
+            
             Table tableApiKey = Table.LoadTable(client, "ApiKey");
             _ = PutDataAsync(tableApiKey, respuestaPasarela).Result;
 
         }
 
-        private static async Task<string> PutDataAsync(Table table, TokenEcollect respuestaPasarela)
+        private static async Task<string> PutDataAsync(Table table, TokenEcollectResponse respuestaPasarela)
         {
             try
             {
 
-                var doc = new Document
+                TokenEcollect tokenEcollect = new TokenEcollect
                 {
-                    ["Id"] = Guid.NewGuid(),
-                    ["SessionToken"] = respuestaPasarela.SessionToken,
-                    ["LifetimeSecs"] = DateTime.Now.AddSeconds(Convert.ToDouble(respuestaPasarela.LifetimeSecs))
+                    Id = Guid.NewGuid().ToString(),
+                    SessionToken = respuestaPasarela.SessionToken,
+                    FechaExpiracion = DateTime.Now.AddSeconds(Convert.ToDouble(respuestaPasarela.LifetimeSecs))
+
                 };
 
-                Document x = await table.PutItemAsync(doc);
-
+                await new DynamoDBContext(new AmazonDynamoDBClient()).SaveAsync(tokenEcollect);
                 return "success";
             }
             catch
@@ -117,6 +101,10 @@ namespace Pasarela
 
         private static void ConfigureServices(IServiceCollection services)
         {
+            services.AddLogging(b =>
+            {
+                b.AddFilter((category, level) => true); // Spam the world with logs.
+            });
 
             services.AddTransient<IEnvironmentService, EnvironmentService>();
             services.AddTransient<IConfigurationService, ConfigurationService>();
@@ -160,90 +148,6 @@ namespace Pasarela
 
             .AddHttpMessageHandler(() => new RetryHandler()) // Retry requests to github using our retry handler
             .AddTypedClient<EcollectTokenClient>();
-        }
-    }
-
-
-    public class EcollectTokenClient
-    {
-        public EcollectTokenClient(HttpClient httpClient)
-        {
-            HttpClient = httpClient;
-        }
-
-        public HttpClient HttpClient { get; }
-
-        // Gets the list of services on github.
-        public async Task<HttpResponseMessage> GetJson(IConfigurationService ConfigService)
-        {
-            string mensaje = JsonConvert.SerializeObject(
-                    new ContentTokenEcollect
-                    {
-                        EntityCode = ConfigService.GetConfiguration()["EntityCode"],
-                        ApiKey = ConfigService.GetConfiguration()["ApiKey"]
-                    });
-            StringContent content = new StringContent(mensaje, Encoding.UTF8, "application/json");
-            var response = await HttpClient.PostAsync(ConfigService.GetConfiguration()["uri"], content).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-
-            return response;
-        }
-    }
-
-    public class ContentTokenEcollect
-    {
-        public string ApiKey { get; set; }
-        public string EntityCode { get; set; }
-    }
-
-    public class TokenEcollect
-    {
-        public string SessionToken { get; set; }
-        public string LifetimeSecs { get; set; }
-        public string ReturnCode { get; set; }
-    }
-
-    public class EnvironmentService : IEnvironmentService
-    {
-        public EnvironmentService()
-        {
-            EnvironmentName = Environment.GetEnvironmentVariable(EnvironmentVariables.AspnetCoreEnvironment)
-                ?? Environments.Production;
-        }
-
-        public string EnvironmentName { get; set; }
-    }
-
-    public static class Constants
-    {
-        public static class EnvironmentVariables
-        {
-            public const string AspnetCoreEnvironment = "ASPNETCORE_ENVIRONMENT";
-        }
-
-        public static class Environments
-        {
-            public const string Production = "Production";
-        }
-    }
-
-    public class ConfigurationService : IConfigurationService
-    {
-        public IEnvironmentService EnvService { get; }
-
-        public ConfigurationService(IEnvironmentService envService)
-        {
-            EnvService = envService;
-        }
-
-        public IConfiguration GetConfiguration()
-        {
-            return new ConfigurationBuilder()
-                .SetBasePath(System.IO.Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{EnvService.EnvironmentName}.json", optional: true)
-                .AddEnvironmentVariables()
-                .Build();
         }
     }
 }
